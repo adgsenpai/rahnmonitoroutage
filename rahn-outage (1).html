@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rahn Monitor — Service Status</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:ital,wght@0,300;0,400;1,300&family=Syne:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --red: #e8001c;
+    --red-dim: #a80014;
+    --red-glow: rgba(232, 0, 28, 0.35);
+    --red-subtle: rgba(232, 0, 28, 0.08);
+    --black: #060606;
+    --surface: #0d0d0d;
+    --border: rgba(232, 0, 28, 0.2);
+    --text: #e5e5e5;
+    --text-muted: #666;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    background: var(--black);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    overflow-x: hidden;
+  }
+
+  /* Noise texture overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 999;
+    opacity: 0.4;
+  }
+
+  /* Ambient red glow top */
+  body::after {
+    content: '';
+    position: fixed;
+    top: -200px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 800px;
+    height: 400px;
+    background: radial-gradient(ellipse, rgba(232,0,28,0.12) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .wrapper {
+    position: relative;
+    z-index: 1;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── TOP BAR ── */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 24px 48px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .logo-group {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    animation: fadeDown 0.7s ease both;
+  }
+
+  .logo-ring {
+    height: 48px;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .logo-ring img {
+    height: 48px;
+    width: auto;
+    filter: drop-shadow(0 0 6px var(--red-glow));
+  }
+
+  .brand-name {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 28px;
+    letter-spacing: 0.12em;
+    color: #fff;
+  }
+
+  .brand-name span {
+    color: var(--red);
+  }
+
+  .status-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--red);
+    border: 1px solid var(--border);
+    padding: 6px 14px;
+    border-radius: 2px;
+    background: var(--red-subtle);
+    animation: fadeDown 0.7s 0.1s ease both;
+  }
+
+  .pulse-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--red);
+    box-shadow: 0 0 8px var(--red);
+    animation: pulse 1.6s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.75); }
+  }
+
+  /* ── MAIN ── */
+  .main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 64px 24px;
+    text-align: center;
+  }
+
+  .eyebrow {
+    font-size: 10px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--red);
+    margin-bottom: 24px;
+    animation: fadeUp 0.8s 0.2s ease both;
+    opacity: 0;
+  }
+
+  .headline {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(52px, 10vw, 110px);
+    line-height: 0.92;
+    letter-spacing: 0.04em;
+    color: #fff;
+    margin-bottom: 32px;
+    animation: fadeUp 0.8s 0.3s ease both;
+    opacity: 0;
+  }
+
+  .headline em {
+    color: var(--red);
+    font-style: normal;
+    text-shadow: 0 0 40px var(--red-glow);
+  }
+
+  .divider {
+    width: 1px;
+    height: 48px;
+    background: linear-gradient(to bottom, var(--red), transparent);
+    margin: 0 auto 32px;
+    animation: fadeUp 0.8s 0.35s ease both;
+    opacity: 0;
+  }
+
+  .message-card {
+    max-width: 640px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-top: 2px solid var(--red);
+    padding: 36px 40px;
+    text-align: left;
+    position: relative;
+    animation: fadeUp 0.8s 0.45s ease both;
+    opacity: 0;
+  }
+
+  .message-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, var(--red-subtle) 0%, transparent 60%);
+    pointer-events: none;
+  }
+
+  .card-label {
+    font-size: 9px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--red);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .card-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .message-text {
+    font-family: 'Syne', sans-serif;
+    font-size: 15px;
+    line-height: 1.75;
+    color: #c8c8c8;
+  }
+
+  .message-text strong {
+    color: #fff;
+    font-weight: 700;
+  }
+
+  /* ── AFFECTED SYSTEMS ── */
+  .systems {
+    margin-top: 24px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    animation: fadeUp 0.8s 0.55s ease both;
+    opacity: 0;
+  }
+
+  .system-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 12px 16px;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+  }
+
+  .sys-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--red);
+    flex-shrink: 0;
+    animation: pulse 1.6s infinite;
+  }
+
+  .sys-name {
+    color: #aaa;
+    font-family: 'DM Mono', monospace;
+  }
+
+  .sys-status {
+    margin-left: auto;
+    color: var(--red);
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+
+  /* ── CONTACT ── */
+  .contact-block {
+    margin-top: 40px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    animation: fadeUp 0.8s 0.65s ease both;
+    opacity: 0;
+  }
+
+  .contact-label {
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .contact-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    color: #fff;
+    background: transparent;
+    border: 1px solid var(--red);
+    padding: 14px 32px;
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    letter-spacing: 0.12em;
+    transition: background 0.2s, box-shadow 0.2s, color 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .contact-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--red);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.25s ease;
+    z-index: 0;
+  }
+
+  .contact-btn:hover::before { transform: scaleX(1); }
+
+  .contact-btn span { position: relative; z-index: 1; }
+
+  .contact-btn svg { position: relative; z-index: 1; }
+
+  .contact-btn:hover {
+    box-shadow: 0 0 24px var(--red-glow);
+  }
+
+  .response-note {
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 0.05em;
+  }
+
+  /* ── FOOTER ── */
+  .footer {
+    padding: 20px 48px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    animation: fadeUp 0.8s 0.75s ease both;
+    opacity: 0;
+  }
+
+  .footer-time {
+    font-variant-numeric: tabular-nums;
+    color: var(--red);
+    font-family: 'DM Mono', monospace;
+  }
+
+  /* ── SCAN LINE ANIMATION ── */
+  .scanline {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(to right, transparent, var(--red), transparent);
+    opacity: 0.25;
+    animation: scan 6s linear infinite;
+    pointer-events: none;
+    z-index: 998;
+  }
+
+  @keyframes scan {
+    0% { top: 0; }
+    100% { top: 100vh; }
+  }
+
+  /* ── KEYFRAMES ── */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(18px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes fadeDown {
+    from { opacity: 0; transform: translateY(-12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @media (max-width: 600px) {
+    .topbar { padding: 20px 20px; }
+    .footer { flex-direction: column; gap: 8px; text-align: center; }
+    .systems { grid-template-columns: 1fr; }
+    .message-card { padding: 24px 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="scanline"></div>
+
+<div class="wrapper">
+
+  <!-- TOP BAR -->
+  <header class="topbar">
+    <div class="logo-group">
+      <div class="logo-ring">
+        <img src="https://www.rahn.co.za/images/logo/RahnLogo.png" alt="Rahn Logo" />
+      </div>
+      <div class="brand-name">RAHN <span>MONITOR</span></div>
+    </div>
+    <div class="status-pill">
+      <div class="pulse-dot"></div>
+      Service Disruption
+    </div>
+  </header>
+
+  <!-- MAIN CONTENT -->
+  <main class="main">
+    <p class="eyebrow">System Status Update</p>
+
+    <h1 class="headline">
+      SERVERS<br><em>OFFLINE</em>
+    </h1>
+
+    <div class="divider"></div>
+
+    <div class="message-card">
+      <div class="card-label">Incident Notice</div>
+      <p class="message-text">
+        Due to <strong>severe weather conditions in the Western Cape</strong>, both our primary cloud infrastructure hosted via <strong>Cloud.co.za</strong> and our physical server located in <strong>Hermanus</strong> are currently offline.
+        <br><br>
+        Our team is actively working to restore all services and bring systems back online <strong>as soon as possible</strong>. We appreciate your patience and understanding during this time.
+      </p>
+    </div>
+
+    <!-- AFFECTED SYSTEMS -->
+    <div class="systems">
+      <div class="system-row">
+        <div class="sys-dot"></div>
+        <span class="sys-name">Cloud.co.za Servers</span>
+        <span class="sys-status">Down</span>
+      </div>
+      <div class="system-row">
+        <div class="sys-dot"></div>
+        <span class="sys-name">Hermanus Physical Server</span>
+        <span class="sys-status">Down</span>
+      </div>
+      <div class="system-row">
+        <div class="sys-dot" style="background:#f59e0b; box-shadow: 0 0 8px #f59e0b; animation: none;"></div>
+        <span class="sys-name">Monitoring Services</span>
+        <span class="sys-status" style="color:#f59e0b;">Degraded</span>
+      </div>
+      <div class="system-row">
+        <div class="sys-dot" style="background:#f59e0b; box-shadow: 0 0 8px #f59e0b; animation: none;"></div>
+        <span class="sys-name">Recovery Operations</span>
+        <span class="sys-status" style="color:#f59e0b;">In Progress</span>
+      </div>
+    </div>
+
+    <!-- CONTACT -->
+    <div class="contact-block">
+      <span class="contact-label">For detailed queries, reach our team directly</span>
+      <a href="mailto:connect@rahn.co.za" class="contact-btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="2" y="4" width="20" height="16" rx="2"/>
+          <polyline points="2,4 12,13 22,4"/>
+        </svg>
+        <span>connect@rahn.co.za</span>
+      </a>
+      <span class="response-note">We will respond as soon as possible</span>
+    </div>
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <span>© 2026 Rahn Monitor</span>
+    <span class="footer-time" id="clock">—</span>
+    <span>Western Cape, ZA</span>
+  </footer>
+
+</div>
+
+<script>
+  function updateClock() {
+    const now = new Date();
+    const h = String(now.getHours()).padStart(2,'0');
+    const m = String(now.getMinutes()).padStart(2,'0');
+    const s = String(now.getSeconds()).padStart(2,'0');
+    document.getElementById('clock').textContent = `${h}:${m}:${s} SAST`;
+  }
+  updateClock();
+  setInterval(updateClock, 1000);
+</script>
+
+</body>
+</html>
